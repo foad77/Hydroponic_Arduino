@@ -1,183 +1,128 @@
-//sensor water
+// Include necessary libraries
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#define ONE_WIRE_BUS 7
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
-///////////////
-//RTC
 #include <Wire.h>
 #include "RTClib.h"
-RTC_DS1307 RTC;
-///////////////
-//Timer
-const int pumpPin = 3;
-const int lightPin = 2;
-
-int Pump_off= 330;     // pump off in minutes
-int Pump_on= 30;       // pump on in minutes
-
-int light_off= 18;      // light off in hour
-int light_on= 6;       // light on in hour
-
-int light_State = LOW;
-int pump_State = LOW;
-
-unsigned long previousMillis_pump = 0;
-unsigned long previousMillis_light = 0;
-
-long interval_pump = 0;
-long interval_light = 16;
-//////////////
-//Fan & pump
-const int heaterPin = 4;
-const int fanPin = 5;
- //int t= 21;
-int T_max_fan= 27;
-int T_min_fan= 24;
-int T_max_heater= 20;
-int T_min_heater= 17;
-//// WAter & humidity
 #include "DHT.h"
-#define DHTPIN 6     // what pin we're connected to
-#define DHTTYPE DHT11   // DHT 11  
-DHT dht(DHTPIN, DHTTYPE);
-//////////////////////////////////////////////////
+
+// Pin Definitions
+#define ONE_WIRE_BUS 7     // Pin for DS18B20 temperature sensor
+#define DHTPIN 6           // Pin for DHT11 sensor
+#define DHTTYPE DHT11      // DHT11 sensor type
+
+// Device Pins
+const int pumpPin = 3;     // Pin for Pump control
+const int lightPin = 2;    // Pin for Light control
+const int heaterPin = 4;   // Pin for Heater control
+const int fanPin = 5;      // Pin for Fan control
+
+// Timing Variables for Pump and Light Control
+const int pumpOffMinutes = 330;  // Pump off duration in minutes
+const int pumpOnMinutes = 30;    // Pump on duration in minutes
+const int lightOffHour = 18;     // Light off hour (24-hour format)
+const int lightOnHour = 6;       // Light on hour (24-hour format)
+
+// Temperature Control Variables
+const int T_max_fan = 27;        // Maximum temperature to turn on Fan (in °C)
+const int T_min_fan = 24;        // Minimum temperature to turn off Fan (in °C)
+const int T_max_heater = 20;     // Maximum temperature to turn off Heater (in °C)
+const int T_min_heater = 17;     // Minimum temperature to turn on Heater (in °C)
+
+// State Variables
+int lightState = LOW;           // Current state of the Light
+int pumpState = LOW;            // Current state of the Pump
+
+// Timing Control Variables
+unsigned long previousMillisPump = 0;   // Stores last time Pump state was updated
+unsigned long previousMillisLight = 0;  // Stores last time Light state was updated
+
+// Initialize libraries
+OneWire oneWire(ONE_WIRE_BUS);           // Setup OneWire instance for DS18B20
+DallasTemperature sensors(&oneWire);     // Setup DallasTemperature instance
+RTC_DS1307 rtc;                          // Setup RTC instance
+DHT dht(DHTPIN, DHTTYPE);                // Setup DHT11 instance
+
 void setup() {
+  // Initialize Serial for debugging
   Serial.begin(9600);
-  Wire.begin();
-  RTC.begin();
- 
-  if (! RTC.isrunning()) {
-    Serial.println("RTC is NOT running");
+
+  // Initialize RTC
+  if (!rtc.begin()) {
+    Serial.println("RTC failed to initialize");
+  }
+  if (!rtc.isrunning()) {
+    Serial.println("RTC is NOT running!");
+    // Update RTC with compile time if needed
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
 
-  DateTime now = RTC.now();
-  DateTime compiled = DateTime(__DATE__, __TIME__);
-  if (now.unixtime() < compiled.unixtime()) {
-    Serial.println("RTC is older than compile time! Updating");
-    RTC.adjust(DateTime(__DATE__, __TIME__));
-  }
- 
-  Serial.println("Setup complete.");
-  //////////////////////
-  Serial.begin(9600);
+  // Initialize Sensors
   sensors.begin();
-  /////////////////////
-  //timer
+  dht.begin();
+
+  // Initialize Device Pins
   pinMode(pumpPin, OUTPUT);
   pinMode(lightPin, OUTPUT);
-  //////////////
-  ///fan & pump
   pinMode(heaterPin, OUTPUT);
-pinMode(fanPin, OUTPUT);
-///// WATER & humidity
-Serial.println("DHT11 test!"); 
-  dht.begin();
-}
-////////////////////////////////////////////////////////////////
-void loop(void)
-{ 
-  // call sensors.requestTemperatures() to issue a global temperature 
-   sensors.requestTemperatures(); // Send the command to get temperatures
-  Serial.print("Temperature: ");
-  Serial.println(sensors.getTempCByIndex(0)); 
-  //delay(1000); 
-  //////////////////////////
-   DateTime now = RTC.now();   
- 
-  // Display the current time
-  Serial.print("Current time: ");
-  Serial.print(now.year(), DEC);
-  Serial.print('/');
-  Serial.print(now.month(), DEC);
-  Serial.print('/');
-  Serial.print(now.day(), DEC);
-  Serial.print(' ');
-  Serial.print(now.hour(), DEC);
-  Serial.print(':');
-  Serial.print(now.minute(), DEC);
-  Serial.print(':');
-  Serial.print(now.second(), DEC);
-  Serial.println();
- 
- /// delay(1000);
- /////////////////////////
- // timer
-  
-  unsigned long currentMillis_light = now.hour();
-  if (currentMillis_light - previousMillis_light >= interval_light) {
-    // save the last time you blinked the LED
-      previousMillis_light = currentMillis_light;
- 
-    // if the LED is off turn it on and vice-versa:
-    if (light_State == LOW) {
-      light_State = HIGH;
-      interval_light = light_off;
-    } else {
-      light_State = LOW;
-      interval_light = light_on;
-    }
-  
-    // set the LED with the pump_State of the variable:
-    digitalWrite(lightPin, light_State);
-  }
-  //////////////
-  unsigned long currentMillis_pump = now.minute();
+  pinMode(fanPin, OUTPUT);
 
-   if (currentMillis_pump - previousMillis_pump >= interval_pump) {
-    // save the last time you blinked the LED
-      previousMillis_pump = currentMillis_pump;
-      
-    // if the LED is off turn it on and vice-versa:
-    if (pump_State == LOW) {
-      pump_State = HIGH;
-      interval_pump = Pump_off;
-    } else {
-      pump_State = LOW;
-      interval_pump = Pump_on;
-    }
-  
-    // set the LED with the pump_State of the variable:
-    digitalWrite(pumpPin, pump_State);
-  }
-  //// Fan & pump
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-
-  // check if returns are valid, if they are NaN (not a number) then something went wrong!
-  if (isnan(t) || isnan(h)) {
-    Serial.println("Failed to read from DHT");
-  } 
-  else {
-    Serial.print("Humidity: "); 
-    Serial.print(h);
-    Serial.print(" %\t");
-    Serial.print("Temperature: "); 
-    Serial.print(t);
-    Serial.println(" *C");
-    
-  }
-
-  if (t >= T_max_fan){
-    digitalWrite(fanPin, LOW);
-    digitalWrite(heaterPin, HIGH);
-  }
-    else { 
-       if (t <= T_min_fan){
-        digitalWrite(fanPin, HIGH);
-       }        
-       }
-   if ( t <= T_min_heater){
-            digitalWrite(heaterPin, LOW);
-            digitalWrite(fanPin, HIGH);
-          }
-         else { 
-         if (t >= T_max_heater){
-              digitalWrite(heaterPin, HIGH);
-         }
-              }
-    
-    
+  Serial.println("Setup complete.");
 }
 
+void loop() {
+  // Request temperature data from DS18B20 sensor
+  sensors.requestTemperatures();
+
+  // Get the current time
+  DateTime now = rtc.now();
+
+  // Control Light based on time of day
+  controlLight(now);
+
+  // Control Pump based on time intervals
+  controlPump(now);
+
+  // Control Fan and Heater based on temperature
+  controlFanAndHeater();
+}
+
+// Function to control light based on the time of day
+void controlLight(DateTime now) {
+  if (now.hour() >= lightOnHour && now.hour() < lightOffHour) {
+    lightState = HIGH;
+  } else {
+    lightState = LOW;
+  }
+  digitalWrite(lightPin, lightState);
+}
+
+// Function to control pump based on time intervals
+void controlPump(DateTime now) {
+  unsigned long currentMillis = millis();
+  unsigned long intervalPump = (pumpState == HIGH) ? pumpOnMinutes * 60000 : pumpOffMinutes * 60000;
+
+  if (currentMillis - previousMillisPump >= intervalPump) {
+    pumpState = (pumpState == HIGH) ? LOW : HIGH;  // Toggle pump state
+    previousMillisPump = currentMillis;  // Update the last time the pump was toggled
+  }
+  digitalWrite(pumpPin, pumpState);
+}
+
+// Function to control fan and heater based on temperature
+void controlFanAndHeater() {
+  float temperature = dht.readTemperature();  // Read temperature from DHT11 sensor
+
+  // Fan Control Logic
+  if (temperature >= T_max_fan) {
+    digitalWrite(fanPin, HIGH);  // Turn on fan
+  } else if (temperature <= T_min_fan) {
+    digitalWrite(fanPin, LOW);   // Turn off fan
+  }
+
+  // Heater Control Logic
+  if (temperature <= T_min_heater) {
+    digitalWrite(heaterPin, HIGH);  // Turn on heater
+  } else if (temperature >= T_max_heater) {
+    digitalWrite(heaterPin, LOW);   // Turn off heater
+  }
+}
